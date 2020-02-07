@@ -201,6 +201,21 @@ func (b *Bot) Run(ctx context.Context, webhooks <-chan notify.WebhookMessage) er
 			return fmt.Errorf("dropped message from forbidden sender")
 		}
 
+		if message.IsForwarded() {
+			level.Debug(b.logger).Log("msg", "forwarded message received, skipping", "text", message.Text)
+			return nil
+		}
+
+		if message.IsReply() {
+			level.Debug(b.logger).Log("msg", "replied message received, skipping", "text", message.Text)
+			return nil
+		}
+
+		if !strings.HasPrefix(message.Text, "/") {
+			level.Debug(b.logger).Log("msg", "message with no '/' prefix received, skipping", "text", message.Text)
+			return nil
+		}
+
 		if err := b.telegram.SendChatAction(message.Chat, telebot.Typing); err != nil {
 			return err
 		}
