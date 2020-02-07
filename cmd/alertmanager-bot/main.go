@@ -245,6 +245,7 @@ func main() {
 			Help:      "Number of webhooks received by this bot",
 		})
 
+
 		prometheus.MustRegister(webhooksCounter)
 
 		m := http.NewServeMux()

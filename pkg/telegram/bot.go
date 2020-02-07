@@ -70,6 +70,7 @@ type Bot struct {
 	telegram *telebot.Bot
 
 	commandsCounter *prometheus.CounterVec
+	alertsDeliveryCounter *prometheus.CounterVec
 	webhooksCounter prometheus.Counter
 }
 
@@ -80,6 +81,15 @@ type BotOption func(b *Bot)
 func NewBot(chats BotChatStore, token string, admin int, opts ...BotOption) (*Bot, error) {
 	bot, err := telebot.NewBot(token)
 	if err != nil {
+		return nil, err
+	}
+
+	alertsDeliveryCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "alertmanagerbot",
+		Name:      "alerts_delivered_total",
+		Help:      "Number of alerts delivered by state",
+	}, []string{"state"})
+	if err := prometheus.Register(alertsDeliveryCounter); err != nil {
 		return nil, err
 	}
 
@@ -100,6 +110,7 @@ func NewBot(chats BotChatStore, token string, admin int, opts ...BotOption) (*Bo
 		admins:          []int{admin},
 		alertmanager:    &url.URL{Host: "localhost:9093"},
 		commandsCounter: commandsCounter,
+		alertsDeliveryCounter: alertsDeliveryCounter,
 		// TODO: initialize templates with default?
 	}
 
@@ -184,6 +195,18 @@ func (b *Bot) Run(ctx context.Context, webhooks <-chan notify.WebhookMessage) er
 		commandStatus:   b.handleStatus,
 		commandAlerts:   b.handleAlerts,
 		commandSilences: b.handleSilences,
+	}
+
+	alertDeliveryStates := []string{
+		"success",
+		"template_fail",
+		"template_fallback",
+		"send_fail",
+	}
+
+	// init counters with 0
+	for _, state := range alertDeliveryStates {
+		b.alertsDeliveryCounter.WithLabelValues(state).Add(0)
 	}
 
 	// init counters with 0
@@ -290,6 +313,7 @@ func (b *Bot) sendWebhook(ctx context.Context, webhooks <-chan notify.WebhookMes
 
 			out, err := b.templates.ExecuteHTMLString(`{{ template "telegram.default" . }}`, data)
 			if err != nil {
+				b.alertsDeliveryCounter.WithLabelValues("template_fail").Inc()
 				level.Warn(b.logger).Log("msg", "failed to template alerts", "err", err)
 				continue
 			}
@@ -297,7 +321,10 @@ func (b *Bot) sendWebhook(ctx context.Context, webhooks <-chan notify.WebhookMes
 			for _, chat := range chats {
 				err = b.telegram.SendMessage(chat, b.truncateMessage(out), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
 				if err != nil {
+					b.alertsDeliveryCounter.WithLabelValues("send_fail").Inc()
 					level.Warn(b.logger).Log("msg", "failed to send message to subscribed chat", "err", err)
+				} else {
+					b.alertsDeliveryCounter.WithLabelValues("success").Inc()
 				}
 			}
 		}
