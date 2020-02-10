@@ -28,23 +28,17 @@ const (
 
 	commandStatus     = "/status"
 	commandAlerts     = "/alerts"
-	commandSilences   = "/silences"
-	commandSilenceAdd = "/silence_add"
-	commandSilence    = "/silence"
-	commandSilenceDel = "/silence_del"
 
 	responseStart = "Hey, %s! I will now keep you up to date!\n" + commandHelp
 	responseStop  = "Alright, %s! I won't talk to you again.\n" + commandHelp
 	responseHelp  = `
 I'm a Prometheus AlertManager Bot for Telegram. I will notify you about alerts.
-You can also ask me about my ` + commandStatus + `, ` + commandAlerts + ` & ` + commandSilences + `
+You can also ask me about my ` + commandStatus + `
 
 Available commands:
 ` + commandStart + ` - Subscribe for alerts.
 ` + commandStop + ` - Unsubscribe for alerts.
 ` + commandStatus + ` - Print the current status.
-` + commandAlerts + ` - List all alerts.
-` + commandSilences + ` - List all silences.
 ` + commandChats + ` - List all users and group chats that subscribed.
 `
 )
@@ -193,8 +187,6 @@ func (b *Bot) Run(ctx context.Context, webhooks <-chan notify.WebhookMessage) er
 		commandHelp:     b.handleHelp,
 		commandChats:    b.handleChats,
 		commandStatus:   b.handleStatus,
-		commandAlerts:   b.handleAlerts,
-		commandSilences: b.handleSilences,
 	}
 
 	alertDeliveryStates := []string{
